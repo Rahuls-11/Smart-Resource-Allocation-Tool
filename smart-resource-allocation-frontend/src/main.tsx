@@ -8,6 +8,7 @@ import Employees from "./pages/Employees"
 import Projects from "./pages/Projects"
 import Match from "./pages/Match"
 import "./index.css";
+import HrResourceAllocation from "./pages/HrResourceAllocation"
 
 const router = createBrowserRouter([
   {
@@ -18,6 +19,7 @@ const router = createBrowserRouter([
       { path: "employees", element: <Employees /> },
       { path: "projects", element: <Projects /> },
       { path: "match", element: <Match /> },
+      { path: "/hr-allocation", element: <HrResourceAllocation/> }
     ],
   },
 ])
