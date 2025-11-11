@@ -1,21 +1,31 @@
-import { Outlet } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Header from "./components/Header";
 import Nav from "./components/Nav";
+import Home from "./pages/Home";
+import Employees from "./pages/Employees";
+import Projects from "./pages/Projects";
+import Match from "./pages/Match";
+import HrResourceAllocation from "./pages/HrResourceAllocation"; // <-- NEW
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Top bar */}
-      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-slate-200">
-        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
-          <Header />
-          <Nav />
-        </div>
-      </header>
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
+      {/* --- Top Header --- */}
+      <Header />
 
-      {/* Page content */}
-      <main className="mx-auto max-w-6xl px-4 py-8">
-        <Outlet />
+      {/* --- Top Navigation Bar --- */}
+      <Nav />
+
+      {/* --- Main Content Area --- */}
+      <main className="flex-1 max-w-7xl mx-auto w-full px-4 md:px-6 lg:px-8 py-6">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/employees" element={<Employees />} />
+          <Route path="/projects" element={<Projects />} />
+          <Route path="/hr-allocation" element={<HrResourceAllocation />} />
+          <Route path="/match" element={<Match />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </main>
     </div>
   );

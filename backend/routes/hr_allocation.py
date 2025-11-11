@@ -25,13 +25,13 @@ def list_allocations():
 def create_allocation():
     db = current_app.config["DB"]
     body = request.get_json(force=True)
-
     emp_id = body.get("employee_id")
     proj_id = body.get("project_id")
+    if not emp_id or not proj_id:
+        return jsonify({"ok": False, "error": "employee_id and project_id are required"}), 400
 
-    emp = db.employees.find_one({"_id": ObjectId(emp_id)}) if emp_id else None
-    proj = db.projects.find_one({"_id": ObjectId(proj_id)}) if proj_id else None
-
+    emp = db.employees.find_one({"_id": ObjectId(emp_id)})
+    proj = db.projects.find_one({"_id": ObjectId(proj_id)})
     if not emp or not proj:
         return jsonify({"ok": False, "error": "Invalid employee or project"}), 400
 
@@ -43,12 +43,12 @@ def create_allocation():
         "allocated_on": datetime.utcnow(),
         "status": "Active",
     }
-
-    db.hr_allocations.insert_one(doc)
+    res = db.hr_allocations.insert_one(doc)
+    doc["_id"] = res.inserted_id
     return jsonify({"ok": True, "allocation": _public(doc)}), 201
 
 @hr_allocation_bp.route("/<id>", methods=["DELETE"])
 def delete_allocation(id):
     db = current_app.config["DB"]
     db.hr_allocations.delete_one({"_id": ObjectId(id)})
-    return jsonify({"ok": True, "message": "Allocation deleted"})
+    return jsonify({"ok": True, "deleted": id})
