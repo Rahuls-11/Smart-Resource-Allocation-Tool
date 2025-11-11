@@ -14,9 +14,7 @@ type Employee = {
   name: string;
   role?: string;
   skills: string[];
-  // NEW
   projects_by_skill?: Record<string, string[]>;
-  // flattened (compat with older records)
   projects?: string[];
   previous_experience?: ExperienceItem[];
   availability?: string;
@@ -31,6 +29,13 @@ function toYMD(d: Date) {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
+
+/** Collapse limits (tweak as you like) */
+const SKILL_COLLAPSE_COUNT = 10;
+const PROJECT_GROUPS_COLLAPSE = 3;          // how many skill-groups to show when collapsed
+const PROJECTS_PER_GROUP_COLLAPSE = 2;      // how many projects per skill-group when collapsed
+const PROJECTS_FLAT_COLLAPSE = 6;           // if no groups and using flattened "projects"
+const PREV_EXP_COLLAPSE_COUNT = 2;
 
 export default function Employees() {
   const [list, setList] = useState<Employee[]>([]);
@@ -49,6 +54,11 @@ export default function Employees() {
   const portfolioRef = useRef<HTMLInputElement>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
+
+  /** Per-row expand states */
+  const [expandSkills, setExpandSkills] = useState<Record<string, boolean>>({});
+  const [expandProjects, setExpandProjects] = useState<Record<string, boolean>>({});
+  const [expandPrevExp, setExpandPrevExp] = useState<Record<string, boolean>>({});
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -192,6 +202,46 @@ export default function Employees() {
     }
   };
 
+  // -------- Helpers for "View more" logic --------
+  const shouldCollapseSkills = (e: Employee) => (e.skills?.length || 0) > SKILL_COLLAPSE_COUNT;
+  const visibleSkills = (e: Employee) =>
+    expandSkills[e.id] ? e.skills : (e.skills || []).slice(0, SKILL_COLLAPSE_COUNT);
+
+  const projectsOverflowGrouped = (pbs: Record<string, string[]>) => {
+    const groupOverflow = Object.keys(pbs).length > PROJECT_GROUPS_COLLAPSE;
+    const anyProjOverflow = Object.values(pbs).some(v => (v?.length || 0) > PROJECTS_PER_GROUP_COLLAPSE);
+    return groupOverflow || anyProjOverflow;
+  };
+
+  const collapsedGroupedProjects = (pbs: Record<string, string[]>) => {
+    const groups = Object.entries(pbs).slice(0, PROJECT_GROUPS_COLLAPSE);
+    return groups.map(([sk, arr]) => [sk, (arr || []).slice(0, PROJECTS_PER_GROUP_COLLAPSE)] as const);
+  };
+
+  const shouldCollapseProjects = (e: Employee) => {
+    if (e.projects_by_skill && Object.keys(e.projects_by_skill).length > 0) {
+      return projectsOverflowGrouped(e.projects_by_skill);
+    }
+    return (e.projects?.length || 0) > PROJECTS_FLAT_COLLAPSE;
+  };
+
+  const visibleProjects = (e: Employee) => {
+    if (expandProjects[e.id]) return e;
+    if (e.projects_by_skill && Object.keys(e.projects_by_skill).length > 0) {
+      const sliced = collapsedGroupedProjects(e.projects_by_skill);
+      const obj: Record<string, string[]> = {};
+      sliced.forEach(([sk, arr]) => (obj[sk] = arr));
+      return { ...e, projects_by_skill: obj };
+    }
+    return { ...e, projects: (e.projects || []).slice(0, PROJECTS_FLAT_COLLAPSE) };
+  };
+
+  const shouldCollapsePrev = (e: Employee) => (e.previous_experience?.length || 0) > PREV_EXP_COLLAPSE_COUNT;
+  const visiblePrev = (e: Employee) =>
+    expandPrevExp[e.id]
+      ? (e.previous_experience || [])
+      : (e.previous_experience || []).slice(0, PREV_EXP_COLLAPSE_COUNT);
+
   // -------- UI --------
   return (
     <>
@@ -251,9 +301,20 @@ export default function Employees() {
 
             {!loading && displayed.map((e) => {
               const isEditing = editingId === e.id;
+
+              // Compute collapsed/expanded views
+              const skillsOverflow = shouldCollapseSkills(e);
+              const skillsToShow = visibleSkills(e);
+
+              const projectsOverflow = shouldCollapseProjects(e);
+              const projView = visibleProjects(e);
+
+              const prevOverflow = shouldCollapsePrev(e);
+              const prevToShow = visiblePrev(e);
+
               return (
                 <tr key={e.id} className="align-top">
-                  {/* Name / badge */}
+                  {/* Name */}
                   <td className="px-4 py-3">
                     {!isEditing ? (
                       <div className="font-medium">{e.name}</div>
@@ -266,25 +327,37 @@ export default function Employees() {
                     )}
                   </td>
 
-                  {/* Skills */}
+                  {/* Skills w/ collapse */}
                   <td className="px-4 py-3">
                     {!isEditing ? (
-                      <div className="flex flex-wrap gap-1">
-                        {(e.skills || []).map((s) => <span key={s} className="inline-flex rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-700">{s}</span>)}
-                        {(e.skills || []).length === 0 && <span className="text-slate-500">-</span>}
-                      </div>
+                      <>
+                        <div className="flex flex-wrap gap-1">
+                          {(skillsToShow || []).map((s) => (
+                            <span key={s} className="inline-flex rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-700">{s}</span>
+                          ))}
+                          {(e.skills || []).length === 0 && <span className="text-slate-500">-</span>}
+                        </div>
+                        {skillsOverflow && (
+                          <button
+                            className="mt-1 text-xs text-indigo-700 hover:underline"
+                            onClick={() => setExpandSkills(prev => ({ ...prev, [e.id]: !prev[e.id] }))}
+                          >
+                            {expandSkills[e.id] ? "View less" : `View more (${(e.skills?.length || 0) - SKILL_COLLAPSE_COUNT})`}
+                          </button>
+                        )}
+                      </>
                     ) : (
                       <input className="w-full h-10 rounded-lg border border-slate-200 px-3" value={editSkills} onChange={(ev) => setEditSkills(ev.target.value)} placeholder="comma-separated" />
                     )}
                   </td>
 
-                  {/* Projects grouped by skill (preferred), else flattened */}
+                  {/* Projects grouped by skill OR flattened, with collapse */}
                   <td className="px-4 py-3">
                     {!isEditing ? (
                       <>
-                        {e.projects_by_skill && Object.keys(e.projects_by_skill).length > 0 ? (
+                        {projView.projects_by_skill && Object.keys(projView.projects_by_skill).length > 0 ? (
                           <div className="space-y-1">
-                            {Object.entries(e.projects_by_skill).map(([sk, projs]) => (
+                            {Object.entries(projView.projects_by_skill).map(([sk, projs]) => (
                               <div key={sk} className="text-[13px]">
                                 <span className="font-medium">{sk}:</span>{" "}
                                 {(projs || []).map((p, idx) => (
@@ -297,13 +370,21 @@ export default function Employees() {
                           </div>
                         ) : (
                           <div className="flex flex-wrap gap-1">
-                            {(e.projects || []).map((p) => (
+                            {(projView.projects || []).map((p) => (
                               <span key={p} className="inline-flex rounded bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700 border border-indigo-200">
                                 {p}
                               </span>
                             ))}
-                            {(!e.projects || e.projects.length === 0) && <span className="text-slate-500">-</span>}
+                            {(!projView.projects || projView.projects.length === 0) && <span className="text-slate-500">-</span>}
                           </div>
+                        )}
+                        {projectsOverflow && (
+                          <button
+                            className="mt-1 text-xs text-indigo-700 hover:underline"
+                            onClick={() => setExpandProjects(prev => ({ ...prev, [e.id]: !prev[e.id] }))}
+                          >
+                            {expandProjects[e.id] ? "View less" : "View more"}
+                          </button>
                         )}
                       </>
                     ) : (
@@ -311,24 +392,34 @@ export default function Employees() {
                     )}
                   </td>
 
-                  {/* Previous Experience (Company/Title) */}
+                  {/* Previous Experience with collapse */}
                   <td className="px-4 py-3">
                     {!isEditing ? (
-                      <ul className="list-disc list-inside text-[13px] text-slate-700 space-y-1">
-                        {(e.previous_experience || []).slice(0, 6).map((x, idx) => {
-                          const parts = [
-                            x.company ? String(x.company) : null,
-                            x.title ? String(x.title) : null
-                          ].filter(Boolean);
-                          return (
-                            <li key={idx}>
-                              {parts.length > 0 ? parts.join(" — ") : "—"}
-                              {x.duration ? ` • ${x.duration}` : ""}
-                            </li>
-                          );
-                        })}
-                        {(!e.previous_experience || e.previous_experience.length === 0) && <span className="text-slate-500">-</span>}
-                      </ul>
+                      <>
+                        <ul className="list-disc list-inside text-[13px] text-slate-700 space-y-1">
+                          {prevToShow.map((x, idx) => {
+                            const parts = [
+                              x.company ? String(x.company) : null,
+                              x.title ? String(x.title) : null
+                            ].filter(Boolean);
+                            return (
+                              <li key={idx}>
+                                {parts.length > 0 ? parts.join(" — ") : "—"}
+                                {x.duration ? ` • ${x.duration}` : ""}
+                              </li>
+                            );
+                          })}
+                          {(!e.previous_experience || e.previous_experience.length === 0) && <span className="text-slate-500">-</span>}
+                        </ul>
+                        {prevOverflow && (
+                          <button
+                            className="mt-1 text-xs text-indigo-700 hover:underline"
+                            onClick={() => setExpandPrevExp(prev => ({ ...prev, [e.id]: !prev[e.id] }))}
+                          >
+                            {expandPrevExp[e.id] ? "View less" : `View more (${(e.previous_experience?.length || 0) - PREV_EXP_COLLAPSE_COUNT})`}
+                          </button>
+                        )}
+                      </>
                     ) : (
                       <div className="text-xs text-slate-500">Previous experience is replaced when you upload a new resume during edit.</div>
                     )}
