@@ -1,0 +1,2 @@
+mongodb name = XYZ@1
+mongodb+srv://rahulsakpal22_db_user:XYZ@1cluster0.mpwnklq.mongodb.net/?appName=Cluster0
